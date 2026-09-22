@@ -1,6 +1,12 @@
 import express from 'express'
 import cors from 'cors'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import db from './db.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const rootDir = path.join(__dirname, '..')
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -105,6 +111,19 @@ app.delete('/api/favorites/:id', (req, res) => {
   }
 
   return res.json({ message: 'Favorite removed.' })
+})
+
+const distPath = path.join(rootDir, 'dist')
+const indexPath = path.join(distPath, 'index.html')
+
+app.use(express.static(distPath))
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next()
+  }
+
+  return res.sendFile(indexPath)
 })
 
 app.listen(PORT, () => {

@@ -1,7 +1,22 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_URL = 'http://localhost:3001/api'
+const STORAGE_KEY = 'quote-generator-favorites'
+const API_URL = import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3001/api' : null)
+
+const getStoredFavorites = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+const setStoredFavorites = (items) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+}
 
 function App() {
   const [quote, setQuote] = useState({
@@ -16,6 +31,17 @@ function App() {
   const fetchQuote = async () => {
     setLoading(true)
     try {
+      if (!API_URL) {
+        const response = await fetch('https://api.quotable.io/random')
+        const data = await response.json()
+        setQuote({
+          content: data.content || data.text || 'Big goals begin with one bold step.',
+          author: data.author || 'Unknown',
+          tags: Array.isArray(data.tags) ? data.tags : ['inspiration'],
+        })
+        return
+      }
+
       const response = await fetch(`${API_URL}/quote`)
       const data = await response.json()
       setQuote(data)
@@ -28,11 +54,17 @@ function App() {
 
   const fetchFavorites = async () => {
     try {
+      if (!API_URL) {
+        setFavorites(getStoredFavorites())
+        return
+      }
+
       const response = await fetch(`${API_URL}/favorites`)
       const data = await response.json()
       setFavorites(data)
     } catch (error) {
       console.error('Favorites fetch failed:', error)
+      setFavorites(getStoredFavorites())
     }
   }
 
@@ -43,6 +75,25 @@ function App() {
 
   const handleSaveFavorite = async () => {
     try {
+      if (!API_URL) {
+        const item = {
+          id: Date.now(),
+          quote: quote.content,
+          author: quote.author,
+          tags: quote.tags || [],
+          createdAt: new Date().toISOString(),
+        }
+
+        const nextItems = [item, ...getStoredFavorites()].filter(
+          (favorite, index, arr) =>
+            arr.findIndex((entry) => entry.quote === favorite.quote && entry.author === favorite.author) === index,
+        )
+
+        setStoredFavorites(nextItems)
+        setFavorites(nextItems)
+        return
+      }
+
       const response = await fetch(`${API_URL}/favorites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +126,13 @@ function App() {
 
   const handleDeleteFavorite = async (id) => {
     try {
+      if (!API_URL) {
+        const nextItems = getStoredFavorites().filter((favorite) => favorite.id !== id)
+        setStoredFavorites(nextItems)
+        setFavorites(nextItems)
+        return
+      }
+
       await fetch(`${API_URL}/favorites/${id}`, {
         method: 'DELETE',
       })
